@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Agent Platform — Developer Onboarding</title>
+<style>
+  :root {
+    --ink: #1a1f2b;
+    --ink-soft: #3c4454;
+    --ink-faint: #6b7383;
+    --paper: #f3f5f7;
+    --card: #ffffff;
+    --line: #d8dde3;
+    --brass: #a67c1e;
+    --brass-soft: rgba(166, 124, 30, 0.12);
+    --code-bg: #eceff2;
+    --shadow: 0 1px 2px rgba(26, 31, 43, 0.06), 0 8px 24px rgba(26, 31, 43, 0.05);
+    --display: "Didot", "Bodoni MT", "Playfair Display", Georgia, "Times New Roman", serif;
+    --body: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e9e7e0;
+      --ink-soft: #bcc2cd;
+      --ink-faint: #848c9b;
+      --paper: #12151c;
+      --card: #1a1f29;
+      --line: #2c3341;
+      --brass: #d9a441;
+      --brass-soft: rgba(217, 164, 65, 0.14);
+      --code-bg: #232a36;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 0 24px 96px; }
+
+  .staff { display: flex; flex-direction: column; gap: 5px; margin: 64px 0 0; }
+  .staff span { display: block; height: 1px; background: var(--line); }
+
+  header.hero { padding: 72px 0 12px; }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--brass);
+    font-weight: 600;
+    margin: 0 0 20px;
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(40px, 7vw, 68px);
+    line-height: 1.04;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+    text-wrap: balance;
+  }
+  h1 em { font-style: italic; color: var(--brass); }
+  .hero-sub {
+    font-size: clamp(16px, 2.2vw, 19px);
+    color: var(--ink-soft);
+    max-width: 40em;
+    margin: 18px 0 0;
+    text-wrap: balance;
+  }
+
+  section { padding-top: 36px; }
+  h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(26px, 3.6vw, 34px);
+    line-height: 1.15;
+    margin: 0 0 12px;
+    text-wrap: balance;
+  }
+  h2 .k { color: var(--brass); font-style: italic; margin-right: 10px; }
+  p { color: var(--ink-soft); max-width: 46em; }
+  p strong, li strong { color: var(--ink); }
+  ol, ul { color: var(--ink-soft); font-size: 14.5px; padding-left: 20px; max-width: 46em; margin: 12px 0 0; }
+  li { margin: 8px 0; }
+  a { color: var(--brass); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  pre.tree {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    padding: 18px 22px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    margin: 20px 0 0;
+  }
+  pre.tree b { color: var(--ink); font-weight: 600; }
+  .callout {
+    border-left: 3px solid var(--brass);
+    background: var(--brass-soft);
+    padding: 12px 18px;
+    border-radius: 0 8px 8px 0;
+    font-size: 14px;
+    color: var(--ink-soft);
+    margin: 18px 0 0;
+    max-width: 46em;
+  }
+  .callout strong { color: var(--ink); }
+
+  .tbl-wrap { overflow-x: auto; margin-top: 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 560px; }
+  th {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 650;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  td { padding: 11px 18px; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--ink-soft); }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { font-weight: 600; color: var(--ink); min-width: 9em; }
+
+  footer {
+    margin-top: 72px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--ink-faint);
+  }
+  footer .fermata { font-family: var(--display); font-size: 34px; color: var(--brass); line-height: 1; display: block; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">InfoTrack · Internal · Developer Onboarding</p>
+    <h1>The Agent Platform<br /><em>for new developers</em></h1>
+    <p class="hero-sub">AgentPlatform is InfoTrack's agent orchestration hub — a chat/agent experience where each configured "Agent" has its own model, instructions, and toolset, exposed both to interactive users and to external callers via an invoke API. This guide gets a new dev from zero to being able to trace a request end-to-end and make a confident first change.</p>
+  </header>
+
+  <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+
+  <section>
+    <h2><span class="k">§1</span>The one thing to get right immediately</h2>
+    <p><strong>AgentPlatform and MaestroAi's own native chat assistant are two different products that happen to share the same MaestroAi .NET backend repo.</strong> Mixing them up is the single easiest mistake to make here if you don't internalize this split first.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th></th><th>AgentPlatform</th><th>MaestroAi's own chat (Opus)</th></tr></thead>
+        <tbody>
+          <tr><td>Frontend</td><td>React SPA (separate <code>AgentPlatformUI</code> repo)</td><td>Embedded in MaestroAi's own product surfaces</td></tr>
+          <tr><td>Orchestration</td><td>Node.js BFF, <code>AgentPlatform/src/node-server</code> (Hono + Vercel AI SDK)</td><td>C#, <code>MaestroAi.Infrastructure.Agents</code> (<code>AgentService</code>, <code>OpusAgentBuilder</code>) + legacy SK (<code>KernelRepository</code>)</td></tr>
+          <tr><td>Domain model</td><td><code>MaestroAi.Domain.AgnosticAgent.Models</code> (<code>Agent</code>, <code>Session</code>, <code>Message</code>, <code>Artifact</code>)</td><td><code>MaestroAi.Domain.Chat.Entities</code> (a <em>different</em> <code>Session</code> class)</td></tr>
+          <tr><td>Purpose</td><td>General-purpose configurable agent hub</td><td>Property/conveyancing ordering assistant (title searches, company extracts, milestones)</td></tr>
+          <tr><td>MaestroAi's role</td><td>Pure persistence/data layer, called over HTTP by the Node BFF</td><td>MaestroAi <em>is</em> the runtime — no separate BFF</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="callout"><strong>Rule of thumb:</strong> if a file lives under <code>MaestroAi.Domain/Infrastructure/Application/Api.Controllers.AgnosticAgent.*</code>, it's AgentPlatform's data layer. If it lives under <code>MaestroAi.Infrastructure.Agents</code> (<code>AgentService.cs</code>, <code>OpusAgentBuilder.cs</code>) or references <code>OpusContext</code>/<code>OpusChatContext</code>, it's the other product. Same repo, same C# namespace root, genuinely different systems.</p>
+  </section>
+
+  <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+
+  <section>
+    <h2><span class="k">§2</span>Repo map</h2>
+    <pre class="tree">Maestro/
+├── <b>AgentPlatform/</b>                        ← the product this guide is about
+│   ├── src/node-server/                  ← Node.js BFF (Hono + Vercel AI SDK 6) — the orchestration brain
+│   │   └── src/
+│   │       ├── routes/chat.ts            ← interactive chat: POST /api/chat
+│   │       ├── routes/invoke.ts          ← external API: POST /api/agents/{agentId}/invoke
+│   │       ├── agent/mcp.ts              ← MCP tool wiring + client pooling
+│   │       ├── agent/model.ts            ← resolves the LLM from agent config
+│   │       ├── agent/context.ts          ← builds context window from message history
+│   │       ├── agent/tools.ts            ← built-in tool filtering
+│   │       ├── lib/auth-context.ts       ← RequestAuthContext: authenticated / device / anonymous
+│   │       ├── lib/machine-auth-client.ts← machine-to-machine OAuth2 client_credentials
+│   │       └── lib/data-layer-client.ts  ← the HTTP client that calls MaestroAi
+│   ├── src/react-spa/                    ← minimal SPA (the main UI lives in AgentPlatformUI, a separate repo)
+│   ├── packages/shared-types/            ← TS types generated from the MaestroAi API spec
+│   ├── docs/adr/                         ← architecture decision records — read these before big changes
+│   ├── .specify/memory/constitution.md   ← hard architectural rules (module isolation, HTTP-only comms)
+│   └── CLAUDE.md                         ← current tech stack + commands
+│
+└── <b>MaestroAi/apis/src/</b>
+    ├── MaestroAi.Domain/AgnosticAgent/Models/         ← Agent, Session, Message, Artifact, McpServer, Principal
+    ├── MaestroAi.Application/AgnosticAgent/           ← MediatR Commands/Queries (CQRS)
+    ├── MaestroAi.Infrastructure/AgnosticAgent/        ← EF Core repositories, migrations, configurations
+    └── MaestroAi.Api/Controllers/AgnosticAgent/       ← the actual HTTP surface the Node BFF calls
+        ├── SessionsController.cs
+        ├── MessagesController.cs
+        ├── ArtifactsController.cs
+        ├── Admin/AgentsController.cs                  ← Agent CRUD (Instructions, ModelId, MaxSteps, McpServers...)
+        └── Admin/McpServersController.cs</pre>
+  </section>
+
+  <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+
+  <section>
+    <h2><span class="k">§3</span>Request lifecycle — trace this first</h2>
+    <p>The fastest way to actually understand the system is to read <code>chat.ts</code> top to bottom and follow every call it makes. In order:</p>
+    <ol>
+      <li><strong>Client → BFF:</strong> React SPA POSTs <code>{ messages, sessionId }</code> to <code>POST /api/chat</code> (<code>routes/chat.ts</code>).</li>
+      <li><strong>Auth resolution:</strong> <code>getRequestAuthContext(c)</code> (<code>lib/auth-context.ts</code>) determines the caller mode — <code>authenticated</code> (Bearer/cookie → resolved to a <code>loginId</code>), <code>device</code> (session-cookie device login), or <code>anonymous</code> (rejected).</li>
+      <li><strong>Load agent config:</strong> <code>dataLayerClient.getSession(sessionId)</code> then <code>dataLayerClient.getAgent(session.agentId)</code> — this is the HTTP round-trip to MaestroAi's <code>AgentsController</code>. If <code>session.agentId</code> is missing, the request fails closed with a 400 rather than silently using defaults.</li>
+      <li><strong>Build the system prompt:</strong> <code>buildSystemPreamble()</code> pushes <code>agentConfig.instructions</code> plus a list of any existing artifacts in the session.</li>
+      <li><strong>Gather tools:</strong> <code>getAgentMcpServerNames(agentConfig)</code> + <code>getMcpToolsForServers()</code> (<code>agent/mcp.ts</code>) filters the agent's configured MCP servers and wires them via <code>@ai-sdk/mcp</code>'s <code>StreamableHTTPClientTransport</code>; <code>getFilteredBuiltInTools()</code> adds built-ins. Write-classified tools get <code>needsApproval: true</code>.</li>
+      <li><strong>Run the model:</strong> <code>streamText({ model: activeModel, messages, tools, stopWhen: [stepCountIs(maxSteps), ...] })</code> — <code>maxSteps</code> comes from <code>agentConfig.maxSteps</code> (default 10), genuinely enforced here.</li>
+      <li><strong>Stream back:</strong> <code>result.toUIMessageStreamResponse()</code> — AI SDK's UI Message Stream protocol over SSE.</li>
+      <li><strong>Persist (fire-and-forget):</strong> <code>onFinish</code> persists the user/assistant messages, tool invocations, and any created/updated artifacts back to MaestroAi.</li>
+    </ol>
+    <p><code>routes/invoke.ts</code> is the external-facing sibling of this same flow (<code>POST /api/agents/{agentId}/invoke</code>) — same agent-config resolution and tool-gathering logic, but session auto-creation, no approval prompts (everything auto-executes), and a choice between a single JSON response or a hand-rolled named-SSE-event stream. It's the closest existing thing to an A2A message endpoint, which is exactly why it's the reuse target for the in-flight A2A work (§5).</p>
+  </section>
+
+  <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+
+  <section>
+    <h2><span class="k">§4</span>Reference codebase — canonical file per concern</h2>
+    <div class="tbl-wrap">
+      <table style="min-width: 720px;">
+        <thead><tr><th>Concern</th><th>File</th><th>What to look at</th></tr></thead>
+        <tbody>
+          <tr><td>Interactive chat</td><td><code>AgentPlatform/src/node-server/src/routes/chat.ts</code></td><td>Full request lifecycle, approval-resubmit handling</td></tr>
+          <tr><td>External invoke API</td><td><code>AgentPlatform/src/node-server/src/routes/invoke.ts</code></td><td>JSON vs SSE response modes, <code>resolveInvokeContext</code></td></tr>
+          <tr><td>MCP tool wiring</td><td><code>AgentPlatform/src/node-server/src/agent/mcp.ts</code></td><td>Client pooling (AIOPS-3537), read/write tool classification</td></tr>
+          <tr><td>Auth</td><td><code>AgentPlatform/src/node-server/src/lib/auth-context.ts</code></td><td>The three <code>RequestAuthContext</code> modes</td></tr>
+          <tr><td>Machine-to-machine auth</td><td><code>AgentPlatform/src/node-server/src/lib/machine-auth-client.ts</code></td><td>OAuth2 client_credentials, the pattern A2A auth will extend</td></tr>
+          <tr><td>Agent domain model</td><td><code>MaestroAi/apis/src/MaestroAi.Domain/AgnosticAgent/Models/Agent.cs</code></td><td>Fields: <code>Instructions</code>, <code>ModelId</code>, <code>MaxSteps</code>, <code>McpServers</code>, <code>BuiltInTools</code>, and the dormant <code>A2AConfig</code> column</td></tr>
+          <tr><td>Session domain model</td><td><code>MaestroAi/apis/src/MaestroAi.Domain/AgnosticAgent/Models/Session.cs</code></td><td><code>AgentId</code>/<code>Agent</code> binding, <code>Status</code> (active/archived — no Task state machine yet)</td></tr>
+          <tr><td>Agent CRUD API</td><td><code>MaestroAi/apis/src/MaestroAi.Api/Controllers/AgnosticAgent/Admin/AgentsController.cs</code></td><td>The .NET surface the Node BFF calls for agent config</td></tr>
+          <tr><td>Session creation</td><td><code>MaestroAi/apis/src/MaestroAi.Application/AgnosticAgent/Commands/Sessions/CreateSession/</code></td><td>How <code>AgentId</code> gets bound to a new session</td></tr>
+          <tr><td>MCP pooling design</td><td><code>AgentPlatform/docs/adr/20260708-mcp-client-pooling-for-session-persistence.md</code></td><td>Why per-call MCP clients broke multi-step flows, and the pooling fix</td></tr>
+          <tr><td>Architecture rules</td><td><code>AgentPlatform/.specify/memory/constitution.md</code></td><td>Module isolation (HTTP-only between .NET/Node/React), typed contracts</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+
+  <section>
+    <h2><span class="k">§5</span>What's actively being built: A2A (Agent2Agent protocol)</h2>
+    <p>AgentPlatform is currently being extended to speak <a href="https://a2a-protocol.org/" rel="noopener">A2A</a>, the open protocol for agent-to-agent interoperability (AgentCard discovery, JSON-RPC task lifecycle, streaming). Tracked under Jira epic <strong>AIOPS-3535</strong>. Current tickets, in build order:</p>
+    <ol>
+      <li><strong>AIOPS-3616</strong> — AgentCard discovery (<code>GET /.well-known/agent.json</code>), activating the dormant <code>Agent.A2AConfig</code> column</li>
+      <li><strong>AIOPS-3618</strong> — agent-to-agent authentication (extends <code>machine-auth-client.ts</code>)</li>
+      <li><strong>AIOPS-3617</strong> — task lifecycle &amp; JSON-RPC message surface, built on <code>invoke.ts</code></li>
+      <li><strong>AIOPS-3619</strong> — outbound A2A client (call another agent as a tool, alongside <code>agent/mcp.ts</code>)</li>
+      <li><strong>AIOPS-3541</strong> — browsable catalogue + user-controlled A2A connections (the UI layer on top)</li>
+    </ol>
+    <p>A separate team (Global Platform / Gateway) is independently building a <strong>Gateway-side A2A relay</strong> (InfoTrack.Platform.ModelContextProtocol repo, PR #509) for externally-hosted agents — AgentPlatform's own A2A work should eventually call <em>through</em> that relay rather than direct-to-upstream once it's available.</p>
+  </section>
+
+  <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+
+  <section>
+    <h2><span class="k">§6</span>Local setup</h2>
+    <pre class="tree"># from AgentPlatform/
+pnpm install
+cd src/node-server &amp;&amp; cp .env.example .env   # fill in secrets
+cd ../..
+pnpm run dev:bff</pre>
+    <p>Recommended: run via the Maestro AppHost instead (orchestrates the BFF + MaestroAi API + Redis + MongoDB together) — see <code>MaestroAi/README.md</code>.</p>
+  </section>
+
+  <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+
+  <section>
+    <h2><span class="k">§7</span>Hard-won lessons (read before your first PR)</h2>
+    <ul>
+      <li><strong>Don't assume a class named <code>AgentService</code> or <code>Session</code> is AgentPlatform's</strong> — check the namespace (§1). <code>MaestroAi.Infrastructure.Agents.AgentService</code> and <code>MaestroAi.Domain.Chat.Entities.Session</code> belong to the <em>other</em> product.</li>
+      <li><strong>Per-agent config (model/instructions/maxSteps/tools) already works end-to-end</strong> in both <code>chat.ts</code> and <code>invoke.ts</code> — don't rebuild this; if something seems unconfigured, check the actual <code>Agent</code> record in the data layer before assuming the plumbing is broken.</li>
+      <li><strong>Ticket titles use <code>AgentPlatform:</code> / <code>AgentPlatform — A2A:</code> prefixes</strong>, not "Workstream N" — the old numbering had gaps once you separate AgentPlatform work from MaestroAi's own Opus-assistant tickets in the same Jira epic.</li>
+      <li><strong>All inter-module communication is HTTP-only</strong> (Node ↔ .NET ↔ React) — no direct imports across module boundaries, per the constitution doc.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <div class="staff" aria-hidden="true" style="margin: 0 0 32px;"><span></span><span></span><span></span><span></span><span></span></div>
+    <span class="fermata">𝄐</span>
+    Agent Platform developer onboarding · InfoTrack internal
+  </footer>
+</main>
+</body>
+</html>
