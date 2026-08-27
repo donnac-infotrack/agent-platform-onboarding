@@ -229,7 +229,7 @@
       <li><strong>Stream back:</strong> <code>result.toUIMessageStreamResponse()</code> — AI SDK's UI Message Stream protocol over SSE.</li>
       <li><strong>Persist (fire-and-forget):</strong> <code>onFinish</code> persists the user/assistant messages, tool invocations, and any created/updated artifacts back to MaestroAi.</li>
     </ol>
-    <p><code>routes/invoke.ts</code> is the external-facing sibling of this same flow (<code>POST /api/agents/{agentId}/invoke</code>) — same agent-config resolution and tool-gathering logic, but session auto-creation, no approval prompts (everything auto-executes), and a choice between a single JSON response or a hand-rolled named-SSE-event stream. It's the closest existing thing to an A2A message endpoint, which is exactly why it's the reuse target for the in-flight A2A work (§5).</p>
+    <p><code>routes/invoke.ts</code> is the external-facing sibling of this same flow (<code>POST /api/agents/{agentId}/invoke</code>) — same agent-config resolution and tool-gathering logic, but session auto-creation, no approval prompts (everything auto-executes), and a choice between a single JSON response or a hand-rolled named-SSE-event stream. It's the closest existing thing to an A2A message endpoint, which is exactly why it's the reuse target for the in-flight A2A work (§6).</p>
   </section>
 
   <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
@@ -259,7 +259,26 @@
   <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
 
   <section>
-    <h2><span class="k">§5</span>What's actively being built: A2A (Agent2Agent protocol)</h2>
+    <h2><span class="k">§5</span>Session inactivity – how it's decided and where to see it</h2>
+    <p><strong>No session is ever marked "inactive".</strong> Inactivity is derived: every activity bumps the session's <code>UpdatedAt</code>, and a session counts as inactive once <code>now &gt; UpdatedAt + ArchiveInactivityDays</code>. Crossing that threshold doesn't change the session by itself – it makes the session <em>eligible</em> for auto-archive, which flips <code>Status</code> from <code>active</code> to <code>archived</code>. Continuing a chat in an archived session moves it back to active.</p>
+    <div class="tbl-wrap">
+      <table style="min-width: 720px;">
+        <thead><tr><th>Piece</th><th>File</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>The rule</td><td><code>MaestroAi.Infrastructure/AgnosticAgent/Repositories/AgnosticAgentRepository.cs</code></td><td><code>ListSessionsToAutoArchiveAsync</code>: selects sessions where <code>Status == "active"</code> and <code>utcNow &gt; UpdatedAt.AddDays(ArchiveInactivityDays)</code></td></tr>
+          <tr><td>The threshold</td><td><code>MaestroAi.Domain/AgnosticAgent/Models/Session.cs</code></td><td><code>ArchiveInactivityDays</code>: per-session int column, default 30 days (EF default in <code>SessionConfiguration.cs</code>)</td></tr>
+          <tr><td>The trigger</td><td><code>MaestroAi.Api/Controllers/AgnosticAgent/SessionsController.cs</code></td><td><code>POST /ag/sessions/auto-archive</code> → <code>AutoArchiveSessionsCommandHandler</code>: archives everything eligible, returns the count archived</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>To check a specific session:</strong> read <code>updatedAt</code> and <code>archiveInactivityDays</code> off the session API response (both are on <code>SessionResponse</code>, or straight off the <code>sessions</code> table) and compare against now. Archived sessions show up in the UI's "Archived" view.</p>
+    <p class="callout"><strong>Configurable, but only in the database.</strong> The threshold is stored per session, yet neither <code>CreateSessionRequest</code> nor <code>UpdateSessionRequest</code> exposes it – no API caller can set it today. Changing it means updating the <code>ArchiveInactivityDays</code> column directly, or changing the EF default for all new sessions. Also note: <strong>nothing calls the auto-archive endpoint on a schedule yet</strong> – sessions only get archived when something POSTs to it explicitly.</p>
+  </section>
+
+  <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+
+  <section>
+    <h2><span class="k">§6</span>What's actively being built: A2A (Agent2Agent protocol)</h2>
     <p>AgentPlatform is currently being extended to speak <a href="https://a2a-protocol.org/" rel="noopener">A2A</a>, the open protocol for agent-to-agent interoperability (AgentCard discovery, JSON-RPC task lifecycle, streaming). Tracked under Jira epic <strong>AIOPS-3535</strong>. Current tickets, in build order:</p>
     <ol>
       <li><strong>AIOPS-3616</strong> — AgentCard discovery (<code>GET /.well-known/agent.json</code>), activating the dormant <code>Agent.A2AConfig</code> column</li>
@@ -274,7 +293,7 @@
   <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
 
   <section>
-    <h2><span class="k">§6</span>Local setup</h2>
+    <h2><span class="k">§7</span>Local setup</h2>
     <pre class="tree"># from AgentPlatform/
 pnpm install
 cd src/node-server &amp;&amp; cp .env.example .env   # fill in secrets
@@ -286,7 +305,7 @@ pnpm run dev:bff</pre>
   <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
 
   <section>
-    <h2><span class="k">§7</span>Hard-won lessons (read before your first PR)</h2>
+    <h2><span class="k">§8</span>Hard-won lessons (read before your first PR)</h2>
     <ul>
       <li><strong>Don't assume a class named <code>AgentService</code> or <code>Session</code> is AgentPlatform's</strong> — check the namespace (§1). <code>MaestroAi.Infrastructure.Agents.AgentService</code> and <code>MaestroAi.Domain.Chat.Entities.Session</code> belong to the <em>other</em> product.</li>
       <li><strong>Per-agent config (model/instructions/maxSteps/tools) already works end-to-end</strong> in both <code>chat.ts</code> and <code>invoke.ts</code> — don't rebuild this; if something seems unconfigured, check the actual <code>Agent</code> record in the data layer before assuming the plumbing is broken.</li>
