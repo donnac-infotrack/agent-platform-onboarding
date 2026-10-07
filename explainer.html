@@ -527,6 +527,8 @@
       <div class="card"><h3>Built-in tools</h3><p>Web search, planning, scratchpads, artifacts and email drafting — available to any agent, no setup.</p></div>
       <div class="card"><h3>File attachments</h3><p>Documents and images the model reads as part of your message. Working memory — not a knowledge base.</p></div>
       <div class="card"><h3>Visible reasoning</h3><p>Watch the agent think and see every tool call, stored with the session — so answers are explainable later.</p></div>
+      <div class="card"><h3>Session context</h3><p>Instructions can carry <code>{{variables}}</code>. Your page supplies the values it already has as context parameters; a pre-flight model run fetches only the rest through MCP, before the first turn.</p></div>
+      <div class="card"><h3>Host context</h3><p>Send the matter or listing identifiers once per session and every tool call the agent makes carries them to the Gateway as headers. They never enter the prompt.</p></div>
     </div>
   </section>
 
@@ -623,7 +625,7 @@
           <tr><td>Search a knowledge base</td><td><span class="pill part">Via MCP</span></td><td>No built-in RAG — retrieval is a tool. Stand up an MCP server over your index; read-only, so it auto-executes.</td></tr>
           <tr><td>Run multi-agent handoffs</td><td><span class="pill no">Not yet</span></td><td>One agent per session. Your app can orchestrate several via invoke calls.</td></tr>
           <tr><td>Run on a schedule</td><td><span class="pill no">Not yet</span></td><td>Trigger invoke from your own scheduler. The platform never self-initiates — also a governance feature.</td></tr>
-          <tr><td>Remember across sessions</td><td><span class="pill no">Not yet</span></td><td>Per-session memory only. Inject durable context via instructions or at invoke time.</td></tr>
+          <tr><td>Remember across sessions</td><td><span class="pill no">Not yet</span></td><td>Per-session memory only. Pass what the page knows as context parameters at create or invoke; let the pre-flight fetch the rest.</td></tr>
           <tr><td>Return JSON-schema output</td><td><span class="pill no">Not yet</span></td><td>Prompt for JSON and validate caller-side; retry on parse failure.</td></tr>
           <tr><td>Version agents</td><td><span class="pill no">Not yet</span></td><td>Agents update in place. Keep prompt text in git; treat the admin UI as deployment.</td></tr>
         </tbody>

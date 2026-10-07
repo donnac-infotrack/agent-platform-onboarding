@@ -99,6 +99,7 @@
     background: var(--code-bg);
     padding: 1px 6px;
     border-radius: 4px;
+    overflow-wrap: anywhere;
   }
   pre.tree {
     background: var(--card);
@@ -189,6 +190,11 @@
 │   │   └── src/
 │   │       ├── routes/chat.ts            ← interactive chat: POST /api/chat
 │   │       ├── routes/invoke.ts          ← external API: POST /api/agents/{agentId}/invoke
+│   │       ├── routes/sessions.ts        ← POST /api/sessions: where session context is gathered
+│   │       ├── agent/create-session-with-context.ts ← parameters → host context → pre-flight → persist
+│   │       ├── agent/preflight-context.ts← the pre-flight model run that fills {{variables}}
+│   │       ├── agent/instructions-template.ts ← {{variable}} detection, sanitising, rendering
+│   │       ├── lib/host-context.ts       ← hostContext schema → Gateway X-ITK-* headers
 │   │       ├── agent/mcp.ts              ← MCP tool wiring + client pooling
 │   │       ├── agent/model.ts            ← resolves the LLM from agent config
 │   │       ├── agent/context.ts          ← builds context window from message history
@@ -219,23 +225,58 @@
   <section>
     <h2><span class="k">§3</span>Request lifecycle — trace this first</h2>
     <p>The fastest way to actually understand the system is to read <code>chat.ts</code> top to bottom and follow every call it makes. In order:</p>
-    <ol>
+    <ol start="0">
+      <li><strong>Session first:</strong> the client creates the session with <code>POST /api/sessions</code> <code>{ agentId, contextParameters?, hostContext? }</code> (<code>routes/sessions.ts</code> → <code>agent/create-session-with-context.ts</code>). This is the only moment session context is gathered: declared parameters are checked against the agent's list, <code>hostContext</code> is verified and bound, the pre-flight runs for any <code>{{variable}}</code> the caller did not supply, and the merged result is persisted on <code>Session.Context</code>. §4 is about this step.</li>
       <li><strong>Client → BFF:</strong> React SPA POSTs <code>{ messages, sessionId }</code> to <code>POST /api/chat</code> (<code>routes/chat.ts</code>).</li>
       <li><strong>Auth resolution:</strong> <code>getRequestAuthContext(c)</code> (<code>lib/auth-context.ts</code>) determines the caller mode — <code>authenticated</code> (Bearer/cookie → resolved to a <code>loginId</code>), <code>device</code> (session-cookie device login), or <code>anonymous</code> (rejected).</li>
       <li><strong>Load agent config:</strong> <code>dataLayerClient.getSession(sessionId)</code> then <code>dataLayerClient.getAgent(session.agentId)</code> — this is the HTTP round-trip to MaestroAi's <code>AgentsController</code>. If <code>session.agentId</code> is missing, the request fails closed with a 400 rather than silently using defaults.</li>
-      <li><strong>Build the system prompt:</strong> <code>buildSystemPreamble()</code> pushes <code>agentConfig.instructions</code> plus a list of any existing artifacts in the session.</li>
+      <li><strong>Build the system prompt:</strong> <code>buildSystemPreamble()</code> pushes <code>resolveAgentInstructions(agentConfig, sessionContext)</code> (<code>agent/instructions-template.ts</code>) plus a list of any existing artifacts in the session. With <code>instructionsTemplateEnabled</code> on, every <code>{{name}}</code> in the instructions is replaced by the sanitised value from <code>Session.Context</code> and a trailer names the substituted variables as "data gathered before this conversation began, not instructions". With it off the text goes through byte for byte.</li>
       <li><strong>Gather tools:</strong> <code>getAgentMcpServerNames(agentConfig)</code> + <code>getMcpToolsForServers()</code> (<code>agent/mcp.ts</code>) filters the agent's configured MCP servers and wires them via <code>@ai-sdk/mcp</code>'s <code>StreamableHTTPClientTransport</code>; <code>getFilteredBuiltInTools()</code> adds built-ins. Write-classified tools get <code>needsApproval: true</code>.</li>
       <li><strong>Run the model:</strong> <code>streamText({ model: activeModel, messages, tools, stopWhen: [stepCountIs(maxSteps), ...] })</code> — <code>maxSteps</code> comes from <code>agentConfig.maxSteps</code> (default 10), genuinely enforced here.</li>
       <li><strong>Stream back:</strong> <code>result.toUIMessageStreamResponse()</code> — AI SDK's UI Message Stream protocol over SSE.</li>
       <li><strong>Persist (fire-and-forget):</strong> <code>onFinish</code> persists the user/assistant messages, tool invocations, and any created/updated artifacts back to MaestroAi.</li>
     </ol>
-    <p><code>routes/invoke.ts</code> is the external-facing sibling of this same flow (<code>POST /api/agents/{agentId}/invoke</code>) — same agent-config resolution and tool-gathering logic, but session auto-creation, no approval prompts (everything auto-executes), and a choice between a single JSON response or a hand-rolled named-SSE-event stream. It's the closest existing thing to an A2A message endpoint, which is exactly why it's the reuse target for the in-flight A2A work (§6).</p>
+    <p><code>routes/invoke.ts</code> is the external-facing sibling of this same flow (<code>POST /api/agents/{agentId}/invoke</code>) — same agent-config resolution and tool-gathering logic, but session auto-creation, no approval prompts (everything auto-executes), and a choice between a single JSON response or a hand-rolled named-SSE-event stream. It takes <code>contextParameters</code> and <code>hostContext</code> too: without a <code>sessionId</code> it creates the session through the same <code>createSessionWithContext</code>, so a context-dependent agent is invokable in one call. The pre-flight gets 30 s there against 60 s on <code>POST /api/sessions</code>. It's the closest existing thing to an A2A message endpoint, which is exactly why it's the reuse target for the in-flight A2A work (§7).</p>
   </section>
 
   <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
 
   <section>
-    <h2><span class="k">§4</span>Reference codebase — canonical file per concern</h2>
+    <h2><span class="k">§4</span>Session context — who supplies what, and what it costs</h2>
+    <p>Three inputs can shape a session at creation. They are often confused because the Tilly - SX integration uses all three. The rule that ties them together: <strong>a <code>{{variable}}</code> in the instructions is filled by the caller if the agent declares it as a context parameter, and by the pre-flight otherwise.</strong></p>
+    <div class="tbl-wrap">
+      <table style="min-width: 720px;">
+        <thead><tr><th>Input</th><th>Who supplies it</th><th>Where it goes</th><th>Cost at create</th></tr></thead>
+        <tbody>
+          <tr><td><code>contextParameters</code></td><td>The caller, against the list the agent declares (<code>Agent.ContextParameters</code>, name + description). A missing, unknown or non-scalar value is a 400; there is no optional parameter.</td><td>A parameter whose name is an instruction variable is sanitised and substituted straight into the system prompt, and the caller's value wins over the pre-flight's. Every parameter is also handed to the pre-flight prose as <code>{{name}}</code>, and recorded in <code>session_context_parameters</code> for <code>GET /api/sessions</code> filtering (never rendered, never returned).</td><td>None.</td></tr>
+          <tr><td>Pre-flight</td><td>The platform: <code>Agent.ContextInstructions</code> prose run once by a model, with the caller's own credential, allowed only the tools in <code>Agent.PreflightTools</code> that also pass the read-only classifier and the deny list.</td><td>One value per instruction variable the caller did not declare, merged into <code>Session.Context</code>. An empty value is a valid outcome; a failed run never blocks the create. The audit row is <code>Agent.preflight_runs</code>.</td><td>Two model calls (gather, then shape) plus the MCP calls the model chooses. Budget 60 s on <code>POST /api/sessions</code>, 30 s on <code>/invoke</code> and A2A.</td></tr>
+          <tr><td><code>hostContext</code></td><td>The host page, as four fixed keys: <code>infoTrackWorkflowId</code>, <code>clientReference</code>, <code>retailerReference</code>, <code>mappingId</code>. Bound once per session; a different value later is <code>409 host_context_conflict</code>.</td><td>The transport only. Forwarded as the Gateway's <code>X-ITK-*</code> common-concern headers on every MCP request the session makes, including the pre-flight's. It never enters the prompt and the model never sees it.</td><td>None.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>Declare it or gather it.</strong> <code>createSessionWithContext</code> asks the pre-flight for <code>requiredInstructionVariables(agent)</code> minus the declared parameter names. When that set is empty, <code>runPreflightContext</code> returns before a model is even resolved (<code>if (variables.length === 0) return finish({})</code>), so an agent whose every instruction variable is a declared parameter pays no model run and no tokens at create. This is the ADR amendment for AIOPS-4034 (27 Sep 2026) in <code>docs/adr/20260911-preflight-context-trust-boundary.md</code>. "Let the host pass the values and fill the instructions from them" is therefore not a feature to build; it is what declaring the variable as a context parameter already does.</p>
+    <div class="callout">
+      <strong>Worked example: Tilly - SX on stage (agent <code>2d2b29da</code>).</strong> Its instructions reference <code>{{clientReference}}</code>, <code>{{matterType}}</code>, <code>{{state}}</code> and <code>{{currentMilestone}}</code>. SecureExchange sends one declared parameter, <code>OpusID</code>, plus <code>hostContext</code>. So the pre-flight runs every time a chat opens and calls <code>opus_data_mcp_server__get_matter_summary</code> and <code>get_current_milestone</code> to fill the four. Over the seven days to 7 Oct 2026, from <code>Pre-flight context run finished</code> logs:
+      <div class="tbl-wrap" style="margin-top: 12px;">
+        <table style="min-width: 0;">
+          <thead><tr><th>Outcome</th><th>Runs</th><th>Mean</th><th>Worst</th></tr></thead>
+          <tbody>
+            <tr><td>All four filled</td><td>45</td><td>14.0 s</td><td>20.6 s</td></tr>
+            <tr><td>Some filled</td><td>67</td><td>17.4 s</td><td>48.3 s</td></tr>
+            <tr><td>None filled (NoOutput)</td><td>25</td><td>14.0 s</td><td>25.8 s</td></tr>
+            <tr><td>Budget expired</td><td>11</td><td>63.8 s</td><td>112.1 s</td></tr>
+          </tbody>
+        </table>
+      </div>
+      Almost all of that time is the model phase (<code>modelPhaseMs</code>), not the MCP calls (<code>toolFetchMs</code> is about one second). The host already has all four values on the listing page. Declaring them as context parameters and sending them next to <code>OpusID</code> from <code>agentPlatformChatTransport.createSession</code> removes the pre-flight for this agent entirely, with no platform change. Two things to know before doing it: declared parameters are mandatory, so the host must have every value before it creates the session; and <code>clientReference</code> must be sent both as <code>hostContext</code> (headers) and as a parameter (prompt), because the two never cross.
+    </div>
+    <p class="callout"><strong>Keeping a pre-flight anyway?</strong> Pick its model. <code>PREFLIGHT_MODEL_TIER</code> names a key of <code>AI_MODEL_TIERS</code>; unset, the pre-flight runs on the agent's own model (stage logs show <code>modelTier: (none)</code>). Separately, <code>Agent.Greeting</code> is shown the moment a chat opens, before any context is gathered, so the wait is not a blank screen. Never declare a secret as a context parameter: values are stored at rest and filter values appear in request logs.</p>
+  </section>
+
+  <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+
+  <section>
+    <h2><span class="k">§5</span>Reference codebase — canonical file per concern</h2>
     <div class="tbl-wrap">
       <table style="min-width: 720px;">
         <thead><tr><th>Concern</th><th>File</th><th>What to look at</th></tr></thead>
@@ -245,8 +286,14 @@
           <tr><td>MCP tool wiring</td><td><code>AgentPlatform/src/node-server/src/agent/mcp.ts</code></td><td>Client pooling (AIOPS-3537), read/write tool classification</td></tr>
           <tr><td>Auth</td><td><code>AgentPlatform/src/node-server/src/lib/auth-context.ts</code></td><td>The three <code>RequestAuthContext</code> modes</td></tr>
           <tr><td>Machine-to-machine auth</td><td><code>AgentPlatform/src/node-server/src/lib/machine-auth-client.ts</code></td><td>OAuth2 client_credentials, the pattern A2A auth will extend</td></tr>
-          <tr><td>Agent domain model</td><td><code>MaestroAi/apis/src/MaestroAi.Domain/AgnosticAgent/Models/Agent.cs</code></td><td>Fields: <code>Instructions</code>, <code>ModelId</code>, <code>MaxSteps</code>, <code>McpServers</code>, <code>BuiltInTools</code>, and the dormant <code>A2AConfig</code> column</td></tr>
-          <tr><td>Session domain model</td><td><code>MaestroAi/apis/src/MaestroAi.Domain/AgnosticAgent/Models/Session.cs</code></td><td><code>AgentId</code>/<code>Agent</code> binding, <code>Status</code> (active/archived — no Task state machine yet)</td></tr>
+          <tr><td>Session creation (BFF)</td><td><code>AgentPlatform/src/node-server/src/agent/create-session-with-context.ts</code></td><td>The one path both <code>POST /api/sessions</code> and <code>/invoke</code> use: parameters → host context → pre-flight → merge → persist</td></tr>
+          <tr><td>Pre-flight</td><td><code>AgentPlatform/src/node-server/src/agent/preflight-context.ts</code></td><td><code>runPreflightContext</code>, the allowlist and deny-list filters, the <code>variables.length === 0</code> short-circuit, what reaches logs vs the audit row</td></tr>
+          <tr><td>Templated instructions</td><td><code>AgentPlatform/src/node-server/src/agent/instructions-template.ts</code></td><td><code>INSTRUCTION_VARIABLE_PATTERN</code> (shared with the data layer and UI), <code>sanitiseContextValue</code>, <code>resolveAgentInstructions</code></td></tr>
+          <tr><td>Host context</td><td><code>AgentPlatform/src/node-server/src/lib/host-context.ts</code></td><td><code>HostContextSchema</code>, the key-to-header table, <code>verifyHostContext</code> (a no-op today, 403 reserved)</td></tr>
+          <tr><td>Pre-flight design</td><td><code>AgentPlatform/docs/adr/20260911-preflight-context-trust-boundary.md</code></td><td>Why the pre-flight is a model decision with the caller's credential; the AIOPS-4034 amendment that lets declared parameters bypass it</td></tr>
+          <tr><td>Host context design</td><td><code>AgentPlatform/docs/adr/20260930-host-context-forwarded-as-gateway-common-concerns.md</code></td><td>Fixed keys, validation rules, bind-once and the 409, why it never enters the prompt</td></tr>
+          <tr><td>Agent domain model</td><td><code>MaestroAi/apis/src/MaestroAi.Domain/AgnosticAgent/Models/Agent.cs</code></td><td>Fields: <code>Instructions</code>, <code>InstructionsTemplateEnabled</code>, <code>ContextInstructions</code>, <code>ContextParameters</code>, <code>PreflightTools</code>, <code>Greeting</code>, <code>ModelId</code>, <code>MaxSteps</code>, <code>McpServers</code>, <code>BuiltInTools</code>, <code>A2AConfig</code></td></tr>
+          <tr><td>Session domain model</td><td><code>MaestroAi/apis/src/MaestroAi.Domain/AgnosticAgent/Models/Session.cs</code></td><td><code>AgentId</code>/<code>Agent</code> binding, <code>Context</code> + <code>ContextStatus</code> (the pre-flight's output), <code>HostContext</code> (set once via <code>PUT /ag/sessions/{id}/host-context</code>), <code>Status</code> (active/archived — no Task state machine yet)</td></tr>
           <tr><td>Agent CRUD API</td><td><code>MaestroAi/apis/src/MaestroAi.Api/Controllers/AgnosticAgent/Admin/AgentsController.cs</code></td><td>The .NET surface the Node BFF calls for agent config</td></tr>
           <tr><td>Session creation</td><td><code>MaestroAi/apis/src/MaestroAi.Application/AgnosticAgent/Commands/Sessions/CreateSession/</code></td><td>How <code>AgentId</code> gets bound to a new session</td></tr>
           <tr><td>MCP pooling design</td><td><code>AgentPlatform/docs/adr/20260708-mcp-client-pooling-for-session-persistence.md</code></td><td>Why per-call MCP clients broke multi-step flows, and the pooling fix</td></tr>
@@ -259,7 +306,7 @@
   <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
 
   <section>
-    <h2><span class="k">§5</span>Session inactivity – how it's decided and where to see it</h2>
+    <h2><span class="k">§6</span>Session inactivity – how it's decided and where to see it</h2>
     <p><strong>No session is ever marked "inactive".</strong> Inactivity is derived: every activity bumps the session's <code>UpdatedAt</code>, and a session counts as inactive once <code>now &gt; UpdatedAt + ArchiveInactivityDays</code>. Crossing that threshold doesn't change the session by itself – it makes the session <em>eligible</em> for auto-archive, which flips <code>Status</code> from <code>active</code> to <code>archived</code>. Continuing a chat in an archived session moves it back to active.</p>
     <div class="tbl-wrap">
       <table style="min-width: 720px;">
@@ -278,7 +325,7 @@
   <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
 
   <section>
-    <h2><span class="k">§6</span>What's actively being built: A2A (Agent2Agent protocol)</h2>
+    <h2><span class="k">§7</span>What's actively being built: A2A (Agent2Agent protocol)</h2>
     <p>AgentPlatform is currently being extended to speak <a href="https://a2a-protocol.org/" rel="noopener">A2A</a>, the open protocol for agent-to-agent interoperability (AgentCard discovery, JSON-RPC task lifecycle, streaming). Tracked under Jira epic <strong>AIOPS-3535</strong>. Current tickets, in build order:</p>
     <ol>
       <li><strong>AIOPS-3616</strong> — AgentCard discovery (<code>GET /.well-known/agent.json</code>), activating the dormant <code>Agent.A2AConfig</code> column</li>
@@ -293,7 +340,7 @@
   <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
 
   <section>
-    <h2><span class="k">§7</span>Local setup</h2>
+    <h2><span class="k">§8</span>Local setup</h2>
     <pre class="tree"># from AgentPlatform/
 pnpm install
 cd src/node-server &amp;&amp; cp .env.example .env   # fill in secrets
@@ -305,10 +352,11 @@ pnpm run dev:bff</pre>
   <div class="staff" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
 
   <section>
-    <h2><span class="k">§8</span>Hard-won lessons (read before your first PR)</h2>
+    <h2><span class="k">§9</span>Hard-won lessons (read before your first PR)</h2>
     <ul>
       <li><strong>Don't assume a class named <code>AgentService</code> or <code>Session</code> is AgentPlatform's</strong> — check the namespace (§1). <code>MaestroAi.Infrastructure.Agents.AgentService</code> and <code>MaestroAi.Domain.Chat.Entities.Session</code> belong to the <em>other</em> product.</li>
       <li><strong>Per-agent config (model/instructions/maxSteps/tools) already works end-to-end</strong> in both <code>chat.ts</code> and <code>invoke.ts</code> — don't rebuild this; if something seems unconfigured, check the actual <code>Agent</code> record in the data layer before assuming the plumbing is broken.</li>
+      <li><strong>Host-supplied instruction variables already exist</strong> (§4). If a chat is slow to open, look at the agent's <code>Pre-flight context run finished</code> logs in Datadog before designing anything: a variable the host already knows should be a declared context parameter, not a pre-flight tool call. The pre-flight is for values only a tool can fetch.</li>
       <li><strong>Ticket titles use <code>AgentPlatform:</code> / <code>AgentPlatform — A2A:</code> prefixes</strong>, not "Workstream N" — the old numbering had gaps once you separate AgentPlatform work from MaestroAi's own Opus-assistant tickets in the same Jira epic.</li>
       <li><strong>All inter-module communication is HTTP-only</strong> (Node ↔ .NET ↔ React) — no direct imports across module boundaries, per the constitution doc.</li>
     </ul>
